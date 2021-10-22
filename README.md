@@ -1,2 +1,2 @@
-# ann-mlp-13063610
+# ann-mlp
 VHDL Class
