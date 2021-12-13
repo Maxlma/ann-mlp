@@ -1,6 +1,10 @@
--- Atualizado 2/11/21 --
+----------------------------
+--Alunos:
+--Gabriel Ginja  #USP: 8954902
+--Marcio Amorim  #USP: 13063610
 
-
+--Atualizado 13/12/21
+----------------------------
 
 LIBRARY IEEE;
 USE IEEE.STD_LOGIC_1164.all;
@@ -9,9 +13,9 @@ USE IEEE.MATH_REAL.ALL;
 
 PACKAGE fixed_package IS
 	CONSTANT N_BIT: INTEGER := 10;
-	CONSTANT max_ind: INTEGER := 4;
-	CONSTANT min_ind: INTEGER := -5;
-	TYPE fixed IS ARRAY(INTEGER RANGE <>)OF BIT;
+	CONSTANT max_ind: INTEGER := 15;
+	CONSTANT min_ind: INTEGER := -15; 
+	TYPE fixed IS ARRAY(INTEGER RANGE <>) OF BIT;
 	TYPE matrix IS ARRAY (NATURAL RANGE <>, NATURAL RANGE <>) OF BIT;
 	SUBTYPE fixed_range IS integer RANGE min_ind TO max_ind;
 	FUNCTION MAX (arg_L, arg_R: INTEGER) RETURN INTEGER;
@@ -19,8 +23,8 @@ PACKAGE fixed_package IS
 	FUNCTION COMP1_FIXED(arg_L: fixed) RETURN fixed;
 	FUNCTION ADD_SUB_FIXED (arg_L, arg_R: fixed; c: BIT) RETURN fixed;
 	FUNCTION MULT_FIXED (arg_L, arg_R: fixed) RETURN fixed;
-	FUNCTION to_fixed (arg_L: INTEGER; max_range: fixed_range := MAX_IND;
-						min_range: fixed_range := 0) RETURN fixed;
+	FUNCTION to_fixed (arg_L: INTEGER; max_range: fixed_range := max_ind;
+						min_range: fixed_range := min_ind) RETURN fixed;
 	FUNCTION to_integer (arg_L: fixed) RETURN integer;
 	FUNCTION "+"(arg_L, arg_R: fixed) RETURN fixed;
 	FUNCTION "+"(arg_L: fixed; arg_R: INTEGER) RETURN fixed;
@@ -39,7 +43,8 @@ PACKAGE fixed_package IS
 	FUNCTION "*"(arg_L: REAL; arg_R: fixed) RETURN fixed;
 	FUNCTION to_fixed (arg_L: REAL; max_range, min_range: fixed_range) RETURN fixed;
 	FUNCTION to_real (arg_L: fixed) RETURN REAL;
-END fixed_package; 
+	FUNCTION Activation (X : fixed) RETURN fixed;
+END fixed_package;
 
 PACKAGE BODY fixed_package IS
 --Internas
@@ -186,7 +191,7 @@ PACKAGE BODY fixed_package IS
 				v_arg_L := COMP1_FIXED(arg_L);
 			END IF;
 			
-			FOR k IN v_arg_L'RANGE LOOP
+			FOR k IN v_arg_L'LEFT DOWNTO 0 LOOP
 				IF v_arg_L(k) = '1' THEN
 					res := (2**k) + res;
 				END IF;
@@ -284,6 +289,7 @@ PACKAGE BODY fixed_package IS
 		
 		FUNCTION "*" (arg_L, arg_R: fixed) RETURN fixed IS
 			VARIABLE res_ext: fixed((arg_R'LENGTH + arg_L'LENGTH - 1) DOWNTO 0);
+			VARIABLE res_ext_2: fixed((arg_R'HIGH + arg_L'HIGH + 1) DOWNTO (arg_R'LOW + arg_L'LOW));
 			VARIABLE res: fixed((arg_R'HIGH + arg_L'HIGH+1) DOWNTO (arg_R'LOW + arg_L'LOW));
 			VARIABLE res_0: fixed((arg_R'LENGTH + arg_L'LENGTH)-1 DOWNTO 0);
 			VARIABLE res_0_R: fixed ((arg_R'LENGTH - 1) DOWNTO 0); 
@@ -325,9 +331,11 @@ PACKAGE BODY fixed_package IS
 				res_ext := MULT_FIXED(arg_L_shift,arg_R_shift);
 			END IF;
 			
-			FOR k IN res_comp'HIGH DOWNTO res_comp'LOW LOOP
-				res_comp(k) := res_ext(k + res_comp'LENGTH);
-			END LOOP;
+--			FOR k IN res_comp'HIGH DOWNTO res_comp'LOW LOOP
+--				res_comp(k) := res_ext(k + 1 + res_comp'LENGTH);
+--			END LOOP;
+			res_ext_2 := res_ext;
+			res_comp := res_ext_2(res_comp'HIGH DOWNTO res_comp'LOW);
 			RETURN res_comp;
 			
 		END "*";
@@ -394,8 +402,8 @@ PACKAGE BODY fixed_package IS
 				arg_F := ADD_SUB_FIXED(COMP1_FIXED(arg_F),res_0_L,'1');
 			END IF;
 			
-			FOR k IN arg_F'RANGE LOOP 
-				IF arg_F(k+max_ind-1) = '1' THEN
+			FOR k IN arg_F'HIGH - 1 DOWNTO arg_F'LOW LOOP 
+				IF arg_F(k) = '1' THEN
 					res := res + (2.0**k);
 				END IF;
 			END LOOP;
@@ -484,5 +492,39 @@ PACKAGE BODY fixed_package IS
 			
 			RETURN res;
 		END to_fixed;
-
+		
+		-- Parâmetro de entrada:
+		-- 	X : fixed [0,1]
+		-- Parâmetro de saída:
+		-- 	SIG : fixed [0,1]
+		-- Retorna:
+		--  / Se      X < -4	SIG =  0.0
+		--  | Se -4 < X < 0 	SIG = +0.03125*X**2+0.25*X+0.5
+		-- <  Se      X = 0 	SIG = +0.5
+		--  | Se  0 < X < 4 	SIG = -0.03125*X**2+0.25*X+0.5
+		--  \ Se      X >= 4 	SIG = +1.0
+			
+		FUNCTION Activation (X : fixed) RETURN fixed IS
+			CONSTANT X_LEFT: INTEGER := X'LEFT;
+			CONSTANT X_RIGHT: INTEGER := X'RIGHT;
+			CONSTANT a2p: fixed(X'RANGE) := to_fixed(0.03125, X_LEFT, X_RIGHT);
+			CONSTANT a2n: fixed(X'RANGE) := to_fixed(-0.03125, X_LEFT, X_RIGHT);
+			CONSTANT a1: fixed(X'RANGE) := to_fixed(0.25000, X_LEFT, X_RIGHT);
+			CONSTANT a0: fixed(X'RANGE) := to_fixed(0.50000, X_LEFT, X_RIGHT);
+			CONSTANT maxSIG: fixed(X'RANGE) := to_fixed(0.99999, X_LEFT, X_RIGHT);
+			CONSTANT minSIG: fixed(X'RANGE) := to_fixed(0.00000, X_LEFT, X_RIGHT);
+			VARIABLE SIG: fixed(X'RANGE);
+		BEGIN
+			IF to_real(X) >= 4.0 THEN		-- Se      X >= 4 SIG = +1.0
+				SIG := maxSIG;
+			ELSIF to_real(X) < -4.0 THEN		-- Se      X < -4 SIG =  0.0
+				SIG := minSIG;
+			ELSIF to_real(X) < 0.0 THEN		-- Se -4 < X < 0  SIG = (+0.03125*X+0.25)*X+0.5
+				SIG := (((a2p * X) + a1) * X) + a0;
+			ELSE				-- Se  0 < X < 4  SIG = (-0.03125*X+0.25)*X+0.5
+				SIG := (((a2n * X )+ a1) * X) + a0;			
+			END IF;
+			RETURN SIG;
+		END;
+		
 END fixed_package;
