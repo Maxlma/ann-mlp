@@ -1,8 +1,5 @@
 # ann-mlp
-VHDL Class 2021
-NUSP 13063610
-NUSP 8954902
-
+Simulacao  de Neuronios
 arquivos importantes:
 na pasta VHDL, ha os arquivos .vhd utilizados para a simulação do neuronio
 
